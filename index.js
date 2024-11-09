@@ -25,8 +25,10 @@ const config = {
     chatMessages: {
       enabled: true,
       messages: [
-        { text: "/is accept EymanBey", delay: 15 },
+        { text: "/register fake3 fake3, delay: 4 },          
+        { text: "/is accept EymanBey", delay: 10 },
         { text: "/skyblock", delay: 5 },
+        { text: "/tpa EymanBey, delay: 10 },                  
         { text: "/home 1", delay: 15 }
       ]
     },
