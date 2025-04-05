@@ -1,11 +1,11 @@
 const mineflayer = require('mineflayer');
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let botConnected = false; // Bot bağlantı durumu
+let botConnected = false;
 
-// Bot yapılandırma ayarları
 const config = {
   botAccount: {
     username: "iWadlessV2",
@@ -25,10 +25,10 @@ const config = {
     chatMessages: {
       enabled: true,
       messages: [      
-        { text: "/is accept EymanBey", delay: 10 },
+        { text: "/skyblock", delay: 10 },
         { text: "/skyblock", delay: 5 },
-        { text: "/", delay: 10 },                  
-        { text: "/home 1", delay: 15 }
+        { text: "/tpa EymanBey", delay: 10 },                  
+        { text: "/", delay: 15 }
       ]
     },
     antiAfk: {
@@ -48,7 +48,26 @@ const config = {
 
 let bot;
 
-// Bot başlatma fonksiyonu
+// ===> Takip fonksiyonu
+function followPlayer(playerName) {
+  const updateFollow = () => {
+    const target = bot.players[playerName]?.entity;
+    if (!target) {
+      console.log(`${playerName} bulunamadı veya görünür değil.`);
+      return;
+    }
+    const goal = new goals.GoalFollow(target, 2); // 2 blok yakınlıkta takip et
+    bot.pathfinder.setGoal(goal, true);
+  };
+
+  // İlk takip başlatma
+  updateFollow();
+
+  // Belirli aralıklarla takip hedefini güncelle (örneğin oyuncu ışınlanırsa vs.)
+  setInterval(updateFollow, 3000);
+}
+
+// ===> Botu başlat
 function startBot() {
   bot = mineflayer.createBot({
     host: config.server.ip,
@@ -59,19 +78,27 @@ function startBot() {
     auth: config.botAccount.type
   });
 
-  // Bot olay dinleyicileri
+  // ===> Pathfinder eklentisini yükle
+  bot.loadPlugin(pathfinder);
+
   bot.on('spawn', () => {
     console.log('Bot bağlandı!');
     botConnected = true;
 
+    // ===> Pathfinder hareket ayarları
+    const mcData = require('minecraft-data')(bot.version);
+    const defaultMove = new Movements(bot, mcData);
+    bot.pathfinder.setMovements(defaultMove);
+
+    // ===> Otomatik giriş
     if (config.utils.autoAuth.enabled) {
       bot.chat(`/login ${config.utils.autoAuth.password}`);
       console.log(`Otomatik giriş: /login ${config.utils.autoAuth.password}`);
     }
 
-    // Mesaj gönderme işlevi
+    // ===> Otomatik mesajlar
     if (config.utils.chatMessages.enabled) {
-      config.utils.chatMessages.messages.forEach((messageObj, index) => {
+      config.utils.chatMessages.messages.forEach((messageObj) => {
         setInterval(() => {
           bot.chat(messageObj.text);
           console.log(`Gönderildi: ${messageObj.text}`);
@@ -79,40 +106,45 @@ function startBot() {
       });
     }
 
-    // Anti-AFK işlevi
+    // ===> Anti-AFK sistemi
     if (config.utils.antiAfk.enabled) {
       setInterval(() => {
-        const moveDirections = ['forward', 'back', 'left', 'right'];
-        const randomDirection = moveDirections[Math.floor(Math.random() * moveDirections.length)];
-        
-        // Rastgele bir yön seç ve kısa süre hareket et
-        bot.setControlState(randomDirection, true);
+        const directions = ['forward', 'back', 'left', 'right'];
+        const dir = directions[Math.floor(Math.random() * directions.length)];
+        bot.setControlState(dir, true);
         setTimeout(() => {
-          bot.setControlState(randomDirection, false);
-        }, 500); // 0.5 saniye hareket et
-        
-        console.log(`Bot ${randomDirection} yönüne hareket etti.`);
-      }, 10000); // Her 10 saniyede bir hareket et
+          bot.setControlState(dir, false);
+        }, 500);
+        console.log(`Bot ${dir} yönüne hareket etti.`);
+      }, 10000);
     }
+
+    // ===> Oyuncuyu takip et
+    followPlayer("EymanBey");
   });
 
-  // Sohbet mesajlarını dinleme
+  // ===> Sohbet mesajlarını dinle
   bot.on('message', (message) => {
-    console.log(message.toString());
+    if (config.chatLog) console.log(message.toString());
   });
 
-  // Bağlantı kesildiğinde yeniden bağlanma
+  // ===> Bot bağlantısı kesilirse yeniden başlat
   bot.on('end', () => {
     console.log('Bot bağlantısı kesildi. Yeniden bağlanacak...');
     botConnected = false;
-    setTimeout(startBot, config.utils.autoReconnectDelay); // Botu yeniden başlat
+    setTimeout(startBot, config.utils.autoReconnectDelay);
+  });
+
+  // ===> Hata dinleyici
+  bot.on('error', (err) => {
+    console.log(`Hata oluştu: ${err.message}`);
   });
 }
 
-// Botu başlat
+// ===> Botu başlat
 startBot();
 
-// Web sunucusu
+// ===> Web sunucusu
 app.get('/', (req, res) => {
   if (botConnected) {
     res.send('Bot başarıyla bağlandı ve sohbetleri dinliyor.');
@@ -121,7 +153,6 @@ app.get('/', (req, res) => {
   }
 });
 
-// Sunucu bağlantısını başlat
 app.listen(port, () => {
   console.log(`Sunucu ${port} numaralı bağlantı noktasında yürütülüyor.`);
 });
